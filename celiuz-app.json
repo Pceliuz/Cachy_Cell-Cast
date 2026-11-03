@@ -1,0 +1,20 @@
+{
+  "ficha": 1,
+  "id": "cell-cast",
+  "nombre": "Cell-Cast",
+  "resumen": "El celular como cámara y micrófono para OBS",
+  "descripcion": "Comparte una app del celular (o la pantalla entera) con su sonido, y OBS la ve como la cámara y el micrófono «Celular». Pensado para hacer streams jugando desde el celular. Va por cable USB o por wifi, con adb.",
+  "categoria": "stream",
+  "icono": "pc/datos/celiuz-cast.svg",
+  "capturas": [],
+  "necesita": ["android"],
+  "pide_sudo": "solo para que la cámara virtual se cree sola al arrancar el equipo",
+  "ordenes": {
+    "instalar": "./instalar.sh",
+    "revisar": "./instalar.sh --revisar",
+    "quitar": "./instalar.sh --quitar",
+    "sistema": "./instalar.sh --sistema",
+    "sistema_quitar": "./instalar.sh --sistema-quitar"
+  },
+  "abrir": "celiuz-cast panel"
+}

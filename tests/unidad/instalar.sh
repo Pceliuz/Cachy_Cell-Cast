@@ -14,6 +14,7 @@ afirmar "el servicio, COPIADO (disable borra una unidad enlazada)" \
 afirmar "no se enciende solo al instalar" sh -c "! grep -qE '^(enable|start)' '$TMP/systemctl.llamadas'"
 afirmar "el .desktop apunta al repo donde esté" grep -qx "Exec=$REPO/pc/celiuz-cast panel" "$XDG_DATA_HOME/applications/celiuz-cast.desktop"
 afirmar "el icono" test -f "$XDG_DATA_HOME/icons/hicolor/scalable/apps/celiuz-cast.svg"
+afirmar_igual "$REPO" "$(readlink -f "$XDG_DATA_HOME/celiuz/apps.d/cell-cast")" "se anuncia al catálogo de los dotfiles"
 afirmar "avisa de que falta la cámara al arrancar" grep -q "no se crea sola al arrancar" "$TMP/salida1"
 
 titulo "2. Lo del sistema"
@@ -36,6 +37,7 @@ afirmar_igual "1" "$(grep -c . "$XDG_DATA_HOME/applications/celiuz-cast.desktop"
 titulo "4. Quitar"
 bash "$REPO/instalar.sh" --quitar > /dev/null 2>&1
 afirmar "quita el comando, el servicio y el lanzador" sh -c "! ls '$HOME/.local/bin/celiuz-cast' '$XDG_CONFIG_HOME/systemd/user/celiuz-cast.service' '$XDG_DATA_HOME/applications/celiuz-cast.desktop' 2>/dev/null | grep -q ."
+afirmar "y el anuncio al catálogo" test ! -e "$XDG_DATA_HOME/celiuz/apps.d/cell-cast"
 afirmar "y el repo sigue ahí" test -f "$REPO/pc/celiuz-cast"
 bash "$REPO/instalar.sh" --sistema-quitar > /dev/null 2>&1
 afirmar "--sistema-quitar quita lo de /etc" sh -c "! find '$TMP/raiz' -type f | grep -q ."

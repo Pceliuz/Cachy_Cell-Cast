@@ -21,6 +21,9 @@ DATOS="${XDG_DATA_HOME:-$HOME/.local/share}"
 UNIDAD="$CONFIG/systemd/user/celiuz-cast.service"
 ESCRITORIO="$DATOS/applications/celiuz-cast.desktop"
 ICONO="$DATOS/icons/hicolor/scalable/apps/celiuz-cast.svg"
+# El anuncio para el catálogo de los dotfiles de Celiuz: un enlace a este repo,
+# para que sepan que está instalada y dónde, se clone donde se clone.
+ANUNCIO="$DATOS/celiuz/apps.d/cell-cast"
 MODPROBE="$RAIZ/etc/modprobe.d/celiuz-cast.conf"
 MODULOS="$RAIZ/etc/modules-load.d/celiuz-cast.conf"
 
@@ -105,6 +108,14 @@ StartupWMClass=celiuz-cast"
         hecho "Celiuz Cast en el lanzador de apps"
     fi
 
+    if [ "$(readlink -f "$ANUNCIO" 2>/dev/null)" = "$REPO" ]; then
+        hecho "anunciada al catálogo de los dotfiles"
+    elif [ "$MODO" = "--revisar" ]; then
+        aviso "sin anunciar al catálogo de los dotfiles"
+    else
+        mkdir -p "$(dirname "$ANUNCIO")" && ln -sfn "$REPO" "$ANUNCIO" && hecho "anunciada al catálogo de los dotfiles"
+    fi
+
     if [ -f "$REPO/app/celiuz-cast.apk" ]; then
         hecho "la app del celular (app/celiuz-cast.apk): se instala desde el panel"
     else
@@ -165,6 +176,7 @@ quitar() {
     systemctl --user stop celiuz-cast.service 2>/dev/null
     rm -f "$UNIDAD" "$ESCRITORIO" "$ICONO"
     [ "$(readlink -f "$BIN/celiuz-cast" 2>/dev/null)" = "$REPO/pc/celiuz-cast" ] && rm -f "$BIN/celiuz-cast"
+    [ "$(readlink -f "$ANUNCIO" 2>/dev/null)" = "$REPO" ] && rm -f "$ANUNCIO"
     systemctl --user daemon-reload 2>/dev/null
     hecho "quitado (la carpeta del repo se queda)"
 }
