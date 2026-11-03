@@ -1,0 +1,9 @@
+[Unit]
+Description=Celiuz Cast: el celular como cámara y micrófono «Celular»
+After=pipewire-pulse.service
+Wants=pipewire-pulse.service
+
+[Service]
+ExecStart=%h/.local/bin/celiuz-cast recibir
+Restart=on-failure
+RestartSec=3

@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+// La firma del APK vive FUERA del repo (~/.config/celiuz-cast/firma.properties),
+// la crea app/compilar.sh la primera vez. Sin ella, se firma con la de depuración.
+def firma = new Properties()
+def ficheroFirma = new File(System.getProperty("user.home"), ".config/celiuz-cast/firma.properties")
+if (ficheroFirma.exists()) ficheroFirma.withInputStream { firma.load(it) }
+
+android {
+    namespace 'com.celiuz.cast'
+    compileSdk {
+        version = release(37)   // la plataforma que hay en el SDK
+    }
+
+    defaultConfig {
+        applicationId "com.celiuz.cast"
+        minSdk 29          // Android 10: lo mínimo para capturar el sonido de las apps
+        targetSdk 36
+        versionCode 1
+        versionName "0.1"
+    }
+
+    signingConfigs {
+        if (firma.getProperty("storeFile")) {
+            propia {
+                storeFile file(firma.getProperty("storeFile"))
+                storePassword firma.getProperty("storePassword")
+                keyAlias firma.getProperty("keyAlias")
+                keyPassword firma.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            optimization {
+                enable true
+            }
+            signingConfig firma.getProperty("storeFile") ? signingConfigs.propia : signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}

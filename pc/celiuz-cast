@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""celiuz-cast — el celular como cámara y micrófono para OBS.
+
+  celiuz-cast panel          la ventana (encender, estado, instalar la app)
+  celiuz-cast encender       empieza a recibir (servicio de systemd --user)
+  celiuz-cast apagar         deja de recibir
+  celiuz-cast estado [--json]
+  celiuz-cast revisar        qué falta en este equipo
+  celiuz-cast instalar-app   instala la app en el celular enchufado
+  celiuz-cast abrir-app      abre la app en el celular
+  celiuz-cast barra          una línea JSON para un módulo custom de waybar
+  celiuz-cast recibir        el receptor en primer plano (lo que corre el servicio)
+"""
+
+import fcntl
+import json
+import os
+import signal
+import subprocess
+import sys
+
+# La raíz del repo sale de dónde está este fichero (se le llama por el enlace
+# de ~/.local/bin, de ahí el realpath).
+PC = os.path.dirname(os.path.realpath(__file__))
+REPO = os.path.dirname(PC)
+sys.path.insert(0, PC)
+
+from celiuz_cast import adb, camara, estado, informe, sonido  # noqa: E402
+from celiuz_cast.receptor import leer_ajustes, tamano_salida  # noqa: E402
+
+SERVICIO = informe.SERVICIO
+APK = informe.ruta_apk(REPO)
+
+
+def ruta_ajustes():
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "celiuz-cast", "ajustes.conf")
+
+
+def systemctl(*args):
+    return subprocess.run(["systemctl", "--user", *args], stdin=subprocess.DEVNULL,
+                          capture_output=True, text=True).returncode
+
+
+# --- recibir ---------------------------------------------------------------
+
+def recibir(args):
+    from celiuz_cast.receptor import Receptor
+
+    carpeta = estado.carpeta_runtime()
+    cerrojo = open(os.path.join(carpeta, "receptor.lock"), "w")
+    try:
+        fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("Ya hay un receptor en marcha.", file=sys.stderr)
+        return 1
+
+    ajustes = leer_ajustes(ruta_ajustes())
+    ancho, alto = tamano_salida(ajustes)
+    # Las pruebas: CELIUZ_CAST_CAMARA (fichero), CELIUZ_CAST_SONIDO (fichero),
+    # CELIUZ_CAST_DIRECTO (host:puerto, sin adb).
+    ruta_camara = os.environ.get("CELIUZ_CAST_CAMARA")
+
+    def abrir_camara():
+        ruta = ruta_camara or camara.buscar()
+        if not ruta:
+            raise OSError("no está la cámara virtual «Celular» (¿pasaste ./instalar.sh?)")
+        return camara.Camara(ruta, ancho, alto)
+
+    if os.environ.get("CELIUZ_CAST_SONIDO"):
+        micro = sonido.MicrofonoEnFichero(os.environ["CELIUZ_CAST_SONIDO"])
+    else:
+        micro = sonido.Microfono(carpeta)
+    directo = None
+    if os.environ.get("CELIUZ_CAST_DIRECTO"):
+        host, puerto = os.environ["CELIUZ_CAST_DIRECTO"].rsplit(":", 1)
+        directo = (host, int(puerto))
+
+    r = Receptor(abrir_camara, micro, estado.Estado(estado.ruta_estado()), ajustes, directo=directo)
+    signal.signal(signal.SIGTERM, lambda *_: r.detener())
+    signal.signal(signal.SIGINT, lambda *_: r.detener())
+    r.correr()
+    return 0
+
+
+# --- estado y barra --------------------------------------------------------
+
+def cmd_estado(args):
+    e = estado.leer()
+    print(json.dumps(e, ensure_ascii=False, indent=2) if "--json" in args else informe.texto_estado(e))
+    return 0
+
+
+ICONO = "\U000f011c"   # nf-md-cellphone
+
+
+def cmd_barra(args):
+    e = estado.leer()
+    clase = e.get("estado", "apagado")
+    if clase == "apagado":
+        salida = {"text": "", "class": "apagado"}
+    else:
+        salida = {"text": ICONO, "class": clase, "tooltip": "Celiuz Cast\n" + informe.texto_estado(e)}
+    print(json.dumps(salida, ensure_ascii=False))
+    return 0
+
+
+# --- encender / apagar -------------------------------------------------------
+
+def cmd_encender(args):
+    if systemctl("start", SERVICIO) != 0:
+        print("No se pudo encender. ¿Pasaste ./instalar.sh? (instala el servicio)", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_apagar(args):
+    return systemctl("stop", SERVICIO)
+
+
+# --- la app del celular ------------------------------------------------------
+
+def elegir_celular():
+    listos = [c for c in adb.celulares() if c["estado"] == "device"]
+    preferido = leer_ajustes(ruta_ajustes()).get("celular")
+    listos.sort(key=lambda c: c["serie"] != preferido)
+    return listos[0] if listos else None
+
+
+def cmd_instalar_app(args):
+    if not os.path.exists(APK):
+        print(f"No está el APK ({APK}). Se compila con app/compilar.sh.", file=sys.stderr)
+        return 1
+    cel = elegir_celular()
+    if not cel:
+        print("No hay ningún celular listo: enchúfalo y acepta la depuración USB.", file=sys.stderr)
+        return 1
+    ok, msg = adb.instalar(cel["serie"], APK)
+    print(f"Instalada en {cel['modelo'] or cel['serie']}." if ok else f"No se pudo instalar: {msg}")
+    return 0 if ok else 1
+
+
+def cmd_abrir_app(args):
+    cel = elegir_celular()
+    if not cel or not adb.abrir_app(cel["serie"]):
+        print("No se pudo abrir la app en el celular.", file=sys.stderr)
+        return 1
+    return 0
+
+
+# --- revisar -----------------------------------------------------------------
+
+def cmd_revisar(args):
+    malas = 0
+    for nombre, ok, arreglo in informe.comprobaciones(REPO):
+        marca = {True: "bien ", False: "FALTA", None: "  -  "}[ok]
+        print(f"  [{marca}] {nombre}" + (f" — {arreglo}" if ok is not True and arreglo else ""))
+        malas += ok is False
+    return 1 if malas else 0
+
+
+def cmd_camara_existe(args):
+    """Para instalar.sh: 0 si la cámara «Celular» existe."""
+    return 0 if camara.buscar() else 1
+
+
+def cmd_panel(args):
+    from celiuz_cast import panel
+    return panel.main(REPO)
+
+
+ORDENES = {
+    "recibir": recibir, "estado": cmd_estado, "barra": cmd_barra, "encender": cmd_encender,
+    "apagar": cmd_apagar, "instalar-app": cmd_instalar_app, "abrir-app": cmd_abrir_app,
+    "revisar": cmd_revisar, "panel": cmd_panel, "camara-existe": cmd_camara_existe,
+}
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "ayuda"):
+        print(__doc__.strip())
+        return 0
+    orden = ORDENES.get(argv[0])
+    if orden is None:
+        print(f"No conozco «{argv[0]}».\n\n{__doc__.strip()}", file=sys.stderr)
+        return 2
+    return orden(argv[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

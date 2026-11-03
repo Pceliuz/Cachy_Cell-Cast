@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- celular -->
+    <path android:fillColor="#00000000" android:strokeColor="#E4C7FF" android:strokeWidth="4"
+        android:pathData="M38,30 h20 a5,5 0 0 1 5,5 v38 a5,5 0 0 1 -5,5 h-20 a5,5 0 0 1 -5,-5 v-38 a5,5 0 0 1 5,-5 z" />
+    <path android:fillColor="#B16CFF" android:pathData="M44,71 h8 v3 h-8 z" />
+    <!-- ondas hacia la PC -->
+    <path android:fillColor="#00000000" android:strokeColor="#B16CFF" android:strokeWidth="4"
+        android:strokeLineCap="round" android:pathData="M68,44 a14,14 0 0 1 0,20" />
+    <path android:fillColor="#00000000" android:strokeColor="#C77DFF" android:strokeWidth="4"
+        android:strokeLineCap="round" android:pathData="M74,38 a22,22 0 0 1 0,32" />
+</vector>

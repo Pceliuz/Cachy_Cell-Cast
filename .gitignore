@@ -1,0 +1,9 @@
+# Lo que genera la compilación de la app y es de cada equipo
+app/local.properties
+app/.gradle/
+app/.kotlin/
+app/build/
+app/app/build/
+# Python
+__pycache__/
+*.pyc
